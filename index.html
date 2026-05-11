@@ -3,18 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sınav Takvimi Pro</title>
+    <title>Sınav Takvimi</title>
     <style>
-        :root { --primary: #2563eb; --danger: #dc2626; --bg: #f8fafc; }
+        :root { --primary: #2563eb; --bg: #f8fafc; }
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Inter', sans-serif; background: var(--bg); padding: 20px; display: flex; justify-content: center; }
+        body { font-family: sans-serif; background: var(--bg); padding: 20px; display: flex; justify-content: center; }
         .container { background: white; padding: 20px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); width: 100%; max-width: 400px; }
-        h2 { margin-bottom: 20px; text-align: center; color: #1e293b; }
-        input, button { width: 100%; padding: 14px; margin-bottom: 12px; border: 1px solid #e2e8f0; border-radius: 10px; font-size: 16px; outline: none; }
-        button { background: var(--primary); color: white; border: none; font-weight: 600; cursor: pointer; transition: 0.2s; }
-        .test-btn { background: #10b981; }
-        .exam-card { background: #f1f5f9; padding: 15px; border-radius: 12px; margin-top: 10px; position: relative; border-left: 6px solid var(--primary); }
-        .delete-btn { background: var(--danger); font-size: 12px; padding: 6px; width: auto; margin-top: 5px; }
+        h2 { text-align: center; margin-bottom: 20px; color: #1e293b; }
+        input, button { width: 100%; padding: 14px; margin-bottom: 12px; border: 1px solid #e2e8f0; border-radius: 10px; font-size: 16px; }
+        button { background: var(--primary); color: white; border: none; font-weight: bold; cursor: pointer; }
+        .exam-card { background: #f1f5f9; padding: 15px; border-radius: 12px; margin-top: 10px; border-left: 6px solid var(--primary); position: relative; }
+        .del-btn { background: #ff4d4d; width: auto; padding: 5px 10px; font-size: 12px; margin-top: 5px; }
     </style>
 </head>
 <body>
@@ -25,44 +24,47 @@
     <input type="date" id="tarih">
     <input type="time" id="saat">
     <button onclick="sinavEkle()">➕ Sınavı Kaydet</button>
-    <button class="test-btn" onclick="testYap()">🔔 Bildirim Testi</button>
     <div id="liste"></div>
 </div>
 
 <script>
-    let sinavlar = JSON.parse(localStorage.getItem("pro_sinavlar")) || [];
+    let sinavlar = JSON.parse(localStorage.getItem("sinavlar_yeni")) || [];
 
-    // İzni butona basınca isteyelim (Daha güvenli)
-    function testYap() {
-        if (!("Notification" in window)) return alert("Tarayıcı desteklemiyor.");
-        
-        Notification.requestPermission().then(perm => {
-            if (perm === "granted") {
-                const b = new Notification("Sistem Onayı!", {
-                    body: "Bildirimler aktif. Sınava 1 dakika kala seni uyaracağım!",
-                    vibrate: [200, 100, 200]
-                });
-            } else {
-                alert("Lütfen Chrome ayarlarından bildirimlere izin ver!");
-            }
-        });
+    // Sayfa açılınca bildirim izni iste
+    if ("Notification" in window) {
+        Notification.requestPermission();
     }
 
     function sinavEkle() {
         const d = document.getElementById("ders").value;
         const t = document.getElementById("tarih").value;
         const s = document.getElementById("saat").value;
+
         if (d && t && s) {
-            sinavlar.push({ id: Date.now(), d, t, s });
-            localStorage.setItem("pro_sinavlar", JSON.stringify(sinavlar));
+            const yeniSinav = { id: Date.now(), ders: d, tarih: t, saat: s };
+            sinavlar.push(yeniSinav);
+            localStorage.setItem("sinavlar_yeni", JSON.stringify(sinavlar));
+            
+            // ANINDA TEST BİLDİRİMİ
+            if (Notification.permission === "granted") {
+                new Notification("Sınav Kaydedildi!", {
+                    body: d + " sınavı başarıyla listeye eklendi.",
+                });
+            } else {
+                alert("Bildirim izni kapalı! Lütfen ayarlardan açın.");
+            }
+            
             render();
-            testYap();
+            // Formu temizle
+            document.getElementById("ders").value = "";
+        } else {
+            alert("Lütfen tüm alanları doldurun.");
         }
     }
 
     function sil(id) {
         sinavlar = sinavlar.filter(x => x.id !== id);
-        localStorage.setItem("pro_sinavlar", JSON.stringify(sinavlar));
+        localStorage.setItem("sinavlar_yeni", JSON.stringify(sinavlar));
         render();
     }
 
@@ -70,28 +72,31 @@
         const l = document.getElementById("liste");
         l.innerHTML = "";
         sinavlar.forEach(x => {
-            l.innerHTML += `<div class="exam-card">
-                <b>${x.d}</b><br><small>${x.t} - ${x.s}</small><br>
-                <button class="delete-btn" onclick="sil(${x.id})">Sil</button>
-            </div>`;
+            l.innerHTML += `
+                <div class="exam-card">
+                    <b>${x.ders}</b><br>
+                    <small>${x.tarih} - ${x.saat}</small><br>
+                    <button class="del-btn" onclick="sil(${x.id})">Sil</button>
+                </div>`;
         });
     }
 
-    // ARKA PLAN KONTROLÜ
+    // Her 30 saniyede bir zamanı kontrol et
     setInterval(() => {
         const simdi = new Date();
         sinavlar.forEach(x => {
-            const hedef = new Date(`${x.t}T${x.s}`);
-            const fark = Math.floor((hedef - simdi) / 60000);
-            
-            if (fark === 1) { // 1 dakika kala
-                new Notification("Sınav Vakti Geldi!", {
-                    body: `${x.d} sınavın 1 dakika sonra başlıyor! Başarılar!`,
-                    tag: "sinav-uyari"
-                });
+            const sinavVakti = new Date(x.tarih + "T" + x.saat);
+            const farkDakika = Math.floor((sinavVakti - simdi) / 60000);
+
+            if (farkDakika === 1) { // 1 dakika kala
+                if (Notification.permission === "granted") {
+                    new Notification("Sınav Hatırlatıcı", {
+                        body: x.ders + " sınavına sadece 1 dakika kaldı!",
+                    });
+                }
             }
         });
-    }, 30000); // 30 saniyede bir kontrol et
+    }, 30000);
 
     render();
 </script>
